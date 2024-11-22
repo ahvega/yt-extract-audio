@@ -7,16 +7,36 @@ import time
 import deepl
 
 def create_temp_dir():
+    """
+    Creates a temporary directory to store downloaded audio files.
+    The directory will be created if it doesn't exist already.
+    """
     if not os.path.exists("temp"):
         os.makedirs("temp")
 
 def create_cache_dir():
+    """
+    Creates a cache directory for storing Whisper model files.
+    
+    Returns:
+        str: Path to the cache directory
+    """
     cache_dir = os.path.join(os.getcwd(), "cache")
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
     return cache_dir
 
 def download_video(url):
+    """
+    Downloads audio from a YouTube video URL using yt-dlp.
+    
+    Args:
+        url (str): YouTube video URL
+        
+    Returns:
+        str: Path to the downloaded audio file (.wav format)
+        None: If download fails
+    """
     try:
         create_temp_dir()
         ydl_opts = {
@@ -43,6 +63,13 @@ def download_video(url):
         return None
 
 def download_progress_hook(d):
+    """
+    Progress hook callback for yt-dlp to display download progress.
+    Creates a visual progress bar in the console.
+    
+    Args:
+        d (dict): Dictionary containing download status information
+    """
     if d['status'] == 'downloading':
         total_bytes = d.get('total_bytes')
         downloaded_bytes = d.get('downloaded_bytes', 0)
@@ -55,7 +82,21 @@ def download_progress_hook(d):
         print("\nDownload completed")
 
 def format_to_markdown(text):
-    """Convert plain text to formatted markdown with topic-based headings"""
+    """
+    Converts plain text to formatted markdown with topic-based headings.
+    
+    The function identifies potential headings based on:
+    - Questions (sentences ending with '?')
+    - Key topic indicators (monetizar, marketing, etc.)
+    - Short statements ending with colons
+    - Numbered points
+    
+    Args:
+        text (str): Plain text to be formatted
+        
+    Returns:
+        str: Formatted markdown text with headers and paragraphs
+    """
     # Split text into paragraphs
     paragraphs = text.split('. ')
     
@@ -109,6 +150,20 @@ def format_to_markdown(text):
     return md_content
 
 def translate_text(text, target_language='ES'):
+    """
+    Translates text using DeepL API.
+    
+    Requires DEEPL_API_KEY in .env file.
+    Uses the free tier API endpoint by default.
+    
+    Args:
+        text (str): Text to translate
+        target_language (str): Target language code (default: 'ES' for Spanish)
+        
+    Returns:
+        str: Translated text
+        None: If translation fails
+    """
     # Load environment variables
     load_dotenv()
     
@@ -148,6 +203,18 @@ def translate_text(text, target_language='ES'):
         return None
 
 def main():
+    """
+    Main execution function that handles the workflow:
+    1. Creates necessary directories
+    2. Checks for existing transcriptions
+    3. Downloads YouTube audio if needed
+    4. Transcribes audio using Whisper
+    5. Translates to Spanish using DeepL
+    6. Formats and saves results in markdown
+    
+    The function implements file caching to avoid unnecessary re-processing
+    and provides progress bars for long-running operations.
+    """
     create_temp_dir()
     cache_dir = create_cache_dir()
     current_dir = os.getcwd()
