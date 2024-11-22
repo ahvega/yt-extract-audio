@@ -17,9 +17,23 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
 
 - Python 3.8+
 - NVIDIA GPU with CUDA support
+- If CUDA is not available, you can use the small model instead:
+  ```python
+  # Instead of:
+  model = whisper.load_model("large", device="cuda", download_root=cache_dir, fp16=True)
+  
+  # Use:
+  model = whisper.load_model("small", download_root=cache_dir)
+  ```
+
 - FFmpeg installed and in PATH
 - DeepL API key
 
 ## Installation
 
 1. Clone the repository: 
+   ```bash
+   git clone https://github.com/ahvega/youtube-transcription-tool.git
+   cd youtube-transcription-tool
+   ```
+
