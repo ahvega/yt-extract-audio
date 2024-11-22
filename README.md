@@ -26,8 +26,21 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
   model = whisper.load_model("small", download_root=cache_dir)
   ```
 
-- FFmpeg installed and in PATH
-- DeepL API key
+- FFmpeg:
+  - Windows: Download from [FFmpeg official website](https://ffmpeg.org/download.html#build-windows) or install via [Chocolatey](https://chocolatey.org/):
+    ```bash
+    choco install ffmpeg
+    ```
+  - macOS: Install via Homebrew:
+    ```bash
+    brew install ffmpeg
+    ```
+  - Linux (Ubuntu/Debian):
+    ```bash
+    sudo apt update
+    sudo apt install ffmpeg
+    ```
+- DeepL API key (get one from [DeepL API page](https://www.deepl.com/pro-api))
 
 ## Installation
 
