@@ -1,0 +1,6 @@
+python-dotenv==1.0.0
+openai-whisper==20231117
+yt-dlp==2024.3.10
+tqdm==4.66.2
+deepl==1.17.0
+torch==2.2.0 
