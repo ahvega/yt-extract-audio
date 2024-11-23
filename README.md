@@ -46,7 +46,7 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
 
 1. Clone the repository: 
    ```bash
-   git clone https://github.com/ahvega/youtube-transcription-tool.git
-   cd youtube-transcription-tool
+   git clone https://github.com/ahvega/yt-extract-audio.git
+   cd yt-extract-audio
    ```
 
