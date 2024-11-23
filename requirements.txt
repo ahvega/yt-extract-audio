@@ -4,3 +4,5 @@ yt-dlp==2024.3.10
 tqdm==4.66.2
 deepl==1.17.0
 torch==2.2.0
+numpy>=1.23.5
+ffmpeg-python>=0.2.0

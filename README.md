@@ -131,3 +131,18 @@ If you have an NVIDIA GPU but CUDA is not being detected, follow these steps:
 
 Note: If CUDA is not available, the script will automatically fall back to CPU processing, which will be significantly slower for transcription tasks.
 
+## Usage
+
+Run the script with a YouTube URL:
+```bash
+python extract-text.py --url "https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+```
+
+Or run with the default test video:
+```bash
+python extract-text.py
+```
+
+Options:
+- `-u, --url`: YouTube video URL to process (optional)
+
