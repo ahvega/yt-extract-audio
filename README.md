@@ -50,12 +50,24 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
    cd yt-extract-audio
    ```
 
-2. Install required packages:
+2. Create and activate a virtual environment:
+   - Windows:
+     ```bash
+     python -m venv venv
+     .\venv\Scripts\activate
+     ```
+   - macOS/Linux:
+     ```bash
+     python -m venv venv
+     source venv/bin/activate
+     ```
+
+3. Install required packages:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Create a `.env` file in the project root directory:
+4. Create a `.env` file in the project root directory:
    ```text
    DEEPL_API_KEY=your-api-key-goes-here
    ```
