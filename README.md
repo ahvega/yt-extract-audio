@@ -50,3 +50,24 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
    cd yt-extract-audio
    ```
 
+2. Install required packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Create a `.env` file in the project root directory:
+   ```text
+   DEEPL_API_KEY=your-api-key-goes-here
+   ```
+   
+   Important notes for `.env` file:
+   - Don't use quotes around the API key
+   - Don't add spaces around the equals sign
+   - Each variable should be on its own line
+   - Get your DeepL API key from:
+     1. [DeepL API page](https://www.deepl.com/pro-api)
+     2. Create an account
+     3. Choose free or pro plan
+     4. Copy API key from account settings
+   - The `.env` file is automatically ignored by Git to keep your API key private
+
