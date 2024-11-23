@@ -5,6 +5,7 @@ from yt_dlp import YoutubeDL
 from tqdm import tqdm
 import time
 import deepl
+import torch
 
 def create_temp_dir():
     """
@@ -202,6 +203,26 @@ def translate_text(text, target_language='ES'):
         print(f"Translation error: {str(e)}")
         return None
 
+def check_cuda_availability():
+    """
+    Checks if CUDA is available and prints relevant information.
+    
+    Returns:
+        bool: True if CUDA is available, False otherwise
+    """
+    try:
+        cuda_available = torch.cuda.is_available()
+        if cuda_available:
+            device_name = torch.cuda.get_device_name(0)
+            print(f"\nCUDA is available. Using GPU: {device_name}")
+        else:
+            print("\nCUDA is not available. Using CPU. This will be significantly slower.")
+            print("If you have an NVIDIA GPU, make sure you have installed the CUDA toolkit and cuDNN.")
+        return cuda_available
+    except Exception as e:
+        print(f"\nError checking CUDA availability: {str(e)}")
+        return False
+
 def main():
     """
     Main execution function that handles the workflow:
@@ -313,17 +334,14 @@ def main():
     
     try:
         print("\n2. Audio Transcription:")
-        # Load the Whisper large model with CUDA device and caching
-        if not os.path.exists(os.path.join(cache_dir, "large")):
-            print("Downloading model (first time only)...")
+        # Check CUDA availability
+        cuda_available = check_cuda_availability()
+        device = "cuda" if cuda_available else "cpu"
         
-        with tqdm(total=100, 
-                 bar_format='Loading Model: [{bar:50}] {percentage:3.1f}%',
-                 desc="2. Model Loading") as pbar:
-            model = whisper.load_model("large", download_root=cache_dir).cuda()
-            for i in range(100):
-                time.sleep(0.01)
-                pbar.update(1)
+        # Load model with appropriate device
+        model = whisper.load_model("large", download_root=cache_dir, device=device)
+        if cuda_available:
+            model = model.cuda()
         
         print("\nTranscribing with Whisper using CUDA...")
         with tqdm(total=100,
