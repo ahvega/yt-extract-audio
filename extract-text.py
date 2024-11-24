@@ -217,10 +217,11 @@ def check_cuda_availability():
         if cuda_available:
             device_name = torch.cuda.get_device_name(0)
             print(f"\nCUDA is available. Using GPU: {device_name}")
+            return True
         else:
             print("\nCUDA is not available. Using CPU. This will be significantly slower.")
             print("If you have an NVIDIA GPU, make sure you have installed the CUDA toolkit and cuDNN.")
-        return cuda_available
+            return False
     except Exception as e:
         print(f"\nError checking CUDA availability: {str(e)}")
         return False
@@ -235,7 +236,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='YouTube video transcription and translation tool')
     parser.add_argument('--url', '-u', type=str, 
                        help='YouTube video URL to process',
-                       default="https://www.youtube.com/watch?v=1F3siwJT6GM")  # Short test video
+                       default="https://youtu.be/vudaAYx2IcE")  # Updated default video
     
     args = parser.parse_args()
     return args.url
@@ -250,14 +251,62 @@ def main():
     
     # Get video URL from command line or use default
     url = parse_arguments()
-    if url == "https://www.youtube.com/watch?v=1F3siwJT6GM":
+    if url == "https://youtu.be/vudaAYx2IcE":
         print("\nNo URL provided. Using sample video for testing...")
     print(f"Processing video: {url}")
     
-    # Rest of your existing main() function...
+    # Download audio
     print("Starting download...")
     audio_file = download_video(url)
-    # ... rest of the code ...
+    if not audio_file:
+        print("Failed to download audio. Exiting.")
+        return
+    
+    try:
+        print("\n2. Audio Transcription:")
+        # Check CUDA availability
+        cuda_available = check_cuda_availability()
+        
+        # Load the Whisper model
+        if not os.path.exists(os.path.join(cache_dir, "large")):
+            print("Downloading model (first time only)...")
+        
+        model = whisper.load_model("large", download_root=cache_dir)
+        if cuda_available:
+            model = model.cuda()
+        
+        print("\nTranscribing with Whisper...")
+        with tqdm(total=100,
+                 bar_format='Transcribing: [{bar:50}] {percentage:3.1f}%',
+                 desc="2. Processing") as pbar:
+            result = model.transcribe(audio_file, fp16=cuda_available)
+            for i in range(100):
+                time.sleep(0.05)
+                pbar.update(1)
+        
+        # Format the transcription
+        formatted_text = format_to_markdown(result["text"])
+        
+        # Save transcription
+        with open("transcription.md", "w", encoding="utf-8") as f:
+            f.write(formatted_text)
+        print("\nTranscription saved to transcription.md")
+        
+        # Translate if needed
+        translated_text = translate_text(result["text"])
+        if translated_text:
+            translated_formatted = format_to_markdown(translated_text)
+            with open("transcription_es.md", "w", encoding="utf-8") as f:
+                f.write(translated_formatted)
+            print("Translation saved to transcription_es.md")
+        
+    except Exception as e:
+        print(f"Error during transcription: {str(e)}")
+    finally:
+        # Cleanup
+        if os.path.exists(audio_file):
+            os.remove(audio_file)
+            print("\nTemporary audio file removed.")
 
 if __name__ == "__main__":
     main() 

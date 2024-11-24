@@ -53,13 +53,13 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
 2. Create and activate a virtual environment:
    - Windows:
      ```bash
-     python -m venv venv
-     .\venv\Scripts\activate
+     python -m venv .venv
+     .\.venv\Scripts\activate
      ```
    - macOS/Linux:
      ```bash
-     python -m venv venv
-     source venv/bin/activate
+     python -m venv .venv
+     source .venv/bin/activate
      ```
 
 3. Install required packages:
