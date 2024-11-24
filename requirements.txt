@@ -5,5 +5,5 @@ tqdm==4.66.2
 deepl==1.17.0
 numpy>=1.24.3
 ffmpeg-python>=0.2.0
---extra-index-url https://download.pytorch.org/whl/cu118
-torch>=2.2.0
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch>=2.2.0+cu121
