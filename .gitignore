@@ -6,7 +6,6 @@ __pycache__/
 .Python
 .venv/
 venv/
-temp/
 env/
 build/
 develop-eggs/
@@ -27,6 +26,8 @@ var/
 temp/
 cache/
 .env
+.venv
+.venv/
 transcription*.txt
 transcription*.md
 
