@@ -18,6 +18,7 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
 - Python 3.8+
 - NVIDIA GPU with CUDA support
 - If CUDA is not available, you can use the small model instead:
+
   ```python
   # Instead of:
   model = whisper.load_model("large", device="cuda", download_root=cache_dir, fp16=True)
@@ -28,23 +29,30 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
 
 - FFmpeg:
   - Windows: Download from [FFmpeg official website](https://ffmpeg.org/download.html#build-windows) or install via [Chocolatey](https://chocolatey.org/):
+
     ```bash
     choco install ffmpeg
     ```
+
   - macOS: Install via Homebrew:
+
     ```bash
     brew install ffmpeg
     ```
+
   - Linux (Ubuntu/Debian):
+
     ```bash
     sudo apt update
     sudo apt install ffmpeg
     ```
+
 - DeepL API key (get one from [DeepL API page](https://www.deepl.com/pro-api))
 
 ## Installation
 
-1. Clone the repository: 
+1. Clone the repository:
+
    ```bash
    git clone https://github.com/ahvega/yt-extract-audio.git
    cd yt-extract-audio
@@ -52,26 +60,31 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
 
 2. Create and activate a virtual environment:
    - Windows:
+
      ```bash
      python -m venv .venv
      .\.venv\Scripts\activate
      ```
+
    - macOS/Linux:
+
      ```bash
      python -m venv .venv
      source .venv/bin/activate
      ```
 
 3. Install required packages:
+
    ```bash
    pip install -r requirements.txt
    ```
 
 4. Create a `.env` file in the project root directory:
+
    ```text
    DEEPL_API_KEY=your-api-key-goes-here
    ```
-   
+
    Important notes for `.env` file:
    - Don't use quotes around the API key
    - Don't add spaces around the equals sign
@@ -88,11 +101,14 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
 ### Verifying CUDA Support
 
 1. Check if you have an NVIDIA GPU:
-   - Windows: 
+   - Windows:
+
      ```bash
      nvidia-smi
      ```
+
    - Linux:
+
      ```bash
      lspci | grep -i nvidia
      ```
@@ -114,6 +130,7 @@ If you have an NVIDIA GPU but CUDA is not being detected, follow these steps:
    - Follow installation instructions for your OS
 
 4. Install PyTorch with CUDA support:
+
    ```bash
    # For CUDA 11.8
    pip install torch --index-url https://download.pytorch.org/whl/cu118
@@ -123,6 +140,7 @@ If you have an NVIDIA GPU but CUDA is not being detected, follow these steps:
    ```
 
 5. Verify installation:
+
    ```python
    import torch
    print("CUDA available:", torch.cuda.is_available())
@@ -134,15 +152,17 @@ Note: If CUDA is not available, the script will automatically fall back to CPU p
 ## Usage
 
 Run the script with a YouTube URL:
+
 ```bash
 python extract-text.py --url "https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
 ```
 
 Or run with the default test video:
+
 ```bash
 python extract-text.py
 ```
 
 Options:
-- `-u, --url`: YouTube video URL to process (optional)
 
+- `-u, --url`: YouTube video URL to process (optional)
