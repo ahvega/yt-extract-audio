@@ -26,8 +26,29 @@ var/
 temp/
 cache/
 .env
-.venv
-.venv/
 transcription*.txt
 transcription*.md
+
+# OS / IDE noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Audio/video media (large, often copyrighted — never commit to this public repo)
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.webm
+*.srt
+
+# Security-sensitive documents and key material (never commit)
+*.pem
+*.key
+*.p12
+id_rsa*
+SECURITY_AUDIT*.md
+*_CREDENTIALS*.md
+docs/private/
 
