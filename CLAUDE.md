@@ -9,9 +9,9 @@ Python CLI tools for YouTube/local-audio transcription on Windows with CUDA (Qua
 
 ## Environment
 
-- Venv at `.venv/`; deps in `requirements.txt` (torch from the cu121 extra index). `requirements.txt` is the authoritative dependency list.
+- Venv at `.venv/`; deps in `requirements.txt` (torch pinned on the cu128 extra index). `requirements.txt` is the authoritative dependency list.
 - Whisper models cache in `cache/`, downloaded audio in `temp/` — both gitignored; never commit them.
-- Requires FFmpeg on PATH and an NVIDIA GPU (falls back to CPU, much slower).
+- Requires FFmpeg on PATH and an NVIDIA GPU. `extract-text.py` falls back to CPU (much slower); `transcribe_local.py` defaults to CUDA — pass `cpu` as the device argument to run without a GPU.
 
 ## Review loop
 
