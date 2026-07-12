@@ -166,3 +166,7 @@ python extract-text.py
 Options:
 
 - `-u, --url`: YouTube video URL to process (optional)
+
+## License
+
+See [LICENSE](LICENSE).
