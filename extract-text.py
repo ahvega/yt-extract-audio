@@ -175,8 +175,6 @@ def translate_text(text, target_language='ES'):
     if not api_key:
         print("Error: DEEPL_API_KEY not found in .env file")
         return None
-        
-    print(f"Debug - API Key loaded: {api_key[:8]}...")
     
     try:
         # Initialize DeepL translator with free API
