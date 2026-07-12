@@ -166,3 +166,40 @@ python extract-text.py
 Options:
 
 - `-u, --url`: YouTube video URL to process (optional)
+
+## Local File Transcription (transcribe_local.py)
+
+Transcribes a local audio file using [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (CTranslate2 backend) with CUDA acceleration. Writes a timestamped text file and an optional SRT subtitle file, streaming progress to the console as each segment is decoded.
+
+```bash
+python transcribe_local.py <audio> <out.txt> [out.srt] [model] [device] [compute] [language]
+```
+
+Arguments (positional; only the first two are required):
+
+- `audio`: Path to the local audio file to transcribe
+- `out.txt`: Output text file with `[HH:MM:SS.mmm -> HH:MM:SS.mmm]` timestamps
+- `out.srt`: Output SRT subtitle file (optional)
+- `model`: Whisper model name (default: `large-v3`)
+- `device`: `cuda` or `cpu` (default: `cuda` — no automatic CPU fallback)
+- `compute`: Compute type (default: `int8`)
+- `language`: Language code such as `es` or `en` (default: auto-detect)
+
+Examples:
+
+```bash
+# Transcribe with defaults (large-v3, CUDA, int8, auto-detected language)
+python transcribe_local.py interview.mp3 interview.txt
+
+# Force Spanish and also produce subtitles
+python transcribe_local.py charla.wav charla.txt charla.srt large-v3 cuda int8 es
+
+# CPU-only machine (much slower; consider a smaller model)
+python transcribe_local.py audio.m4a audio.txt "" small cpu int8
+```
+
+Notes:
+
+- On Pascal GPUs (e.g. Quadro P5000, sm_61) keep `int8` compute — it uses fast DP4A integer kernels, while `fp16` is slow on that architecture.
+- On Windows the script reuses the cuBLAS/cuDNN DLLs bundled with the installed `torch` package, so no separate cuDNN installation is needed.
+- Transcription output files (`transcription*.md`, `*.srt`) and media files are gitignored — this is intentional for a public repository.
