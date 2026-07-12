@@ -13,6 +13,10 @@ Python CLI tools for YouTube/local-audio transcription on Windows with CUDA (Qua
 - Whisper models cache in `cache/`, downloaded audio in `temp/` — both gitignored; never commit them.
 - Requires FFmpeg on PATH and an NVIDIA GPU (falls back to CPU, much slower).
 
+## Review loop
+
+PR review procedure, domain invariants for reviewers, and branch-naming convention live in `AGENTS.md` (read by codex/agy too) — that file is canonical for them.
+
 ## Security & Data Safety
 
 - **Secrets**: never read, print, log, or commit `.env` (holds `DEEPL_API_KEY`). It is gitignored; keep it that way. Never echo the key into commits, PRs, or artifacts.
