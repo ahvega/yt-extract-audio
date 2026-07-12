@@ -2,15 +2,15 @@
 
 Python CLI tools for YouTube/local-audio transcription on Windows with an NVIDIA Quadro P5000 (Pascal, sm_61). Public repo, solo maintainer.
 
-| Module | Purpose | Status (2026-07-11) |
+| Module | Purpose | Status (2026-07-12) |
 |---|---|---|
 | `extract-text.py` | YouTube download (yt-dlp) → openai-whisper transcription → optional DeepL translation to Spanish | working, stable |
-| `transcribe_local.py` | Local audio → faster-whisper (CUDA int8) → txt + SRT | new, post-review fixes applied |
+| `transcribe_local.py` | Local audio → faster-whisper (CUDA int8) → txt + SRT | working; reviewed + merged (PR #2), documented in README |
 | `requirements.txt` | Authoritative dependency list (torch pinned to the cu128 PyTorch index) | pinned set |
 
 ## Domain-critical invariants (reviewers: treat violations as blocking)
 
-- **Dependency pins are load-bearing.** `torch` MUST stay pinned with the `+cu128` local version on `--extra-index-url https://download.pytorch.org/whl/cu128`. A bare `torch>=X` resolves a newer **CPU-only** wheel from PyPI (extra-index picks the highest version across indexes) and silently kills CUDA. `faster-whisper`/`ctranslate2` pins must keep cuDNN majors compatible with the bundled torch DLLs.
+- **Dependency pins are load-bearing.** `torch` MUST stay pinned with the `+cu128` local version on `--extra-index-url https://download.pytorch.org/whl/cu128`. A bare `torch>=X` resolves a newer **CPU-only** wheel from PyPI (extra-index picks the highest version across indexes) and silently kills CUDA. `faster-whisper`/`ctranslate2` pins must keep cuDNN majors compatible with the bundled torch DLLs. When updating pins, read the working venv first (`.venv/Scripts/pip list`) — it is the empirically working set and requirements.txt has drifted from it before.
 - **Pascal (sm_61) quirk:** `int8` compute is fast (DP4A); `fp16` is slow. Don't "upgrade" defaults to fp16.
 - **`transcribe_local.py` reuses torch's bundled cuBLAS/cuDNN DLLs** via `os.add_dll_directory` derived from the installed torch package — never reintroduce hardcoded machine paths.
 - **Secrets:** `.env` holds `DEEPL_API_KEY`; never read, print (even partially), log, or commit it. `.env` is gitignored and has never been in history — keep it that way.
@@ -20,7 +20,7 @@ Python CLI tools for YouTube/local-audio transcription on Windows with an NVIDIA
 ## Build / test
 
 - Venv: `.venv/` (Python 3.14). Install: `pip install -r requirements.txt`.
-- No test suite. Minimum gate: `.venv/Scripts/python -m py_compile extract-text.py transcribe_local.py` plus a manual smoke run when behavior changes.
+- No test suite. Minimum gate: `.venv/Scripts/python -m py_compile extract-text.py transcribe_local.py`. For CUDA/DLL/dependency changes that is insufficient — run the GPU smoke test: `ffmpeg -y -f lavfi -i "sine=frequency=440:duration=3" -ar 16000 t.wav` then `.venv/Scripts/python transcribe_local.py t.wav t.txt "" tiny cuda int8` (exit 0 = model load + decode verified on the P5000).
 - Branch naming (enforced by hook): `<type>/<id>--<source>`, type ∈ {feat,fix,docs,chore,refactor,test,perf}, source ∈ {rm,spec,plan,issue-N,user} (rm/spec/plan ids must include the ws-code).
 
 ## Review procedure
@@ -54,6 +54,18 @@ changes) + **agy** (Gemini CLI, optional third viewpoint).
    mergeable → request human merge and continue.
 6. Expect codex to escalate to ever-narrower edges: fix the concrete asymmetries, then
    **draw the line** — PR + Sourcery + human merge are the remaining gates.
+
+### Adjudicated findings (do not re-flag; see PR #2 triage)
+
+- **Discarded `os.add_dll_directory()` handle**: NOT a bug — CPython's `_AddedDllDirectory`
+  has no finalizer (verified against the 3.14 stdlib); the handle is retained anyway as
+  hardening. Claims that refcounting removes the search path are wrong.
+- **Incremental flush instead of atomic temp-file writes** in `transcribe_local.py`:
+  deliberate — live progress and salvageable partial transcripts. An input/output
+  path-collision guard covers the destructive case.
+- **Positional CLI (no argparse)** and **`--extra-index-url` (not `--index-url`)**:
+  accepted tradeoffs — the non-torch deps only exist on PyPI, and the at-risk packages
+  carry exact local-version pins.
 
 *Data note:* the loop sends only diffs (never gitignored secrets); the repo must hold no
 real PII/PHI. External reviewer CLIs are authorized dev tools with the same repo access as
