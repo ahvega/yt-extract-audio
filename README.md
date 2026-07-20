@@ -1,30 +1,25 @@
 # YouTube Transcription & Translation Tool
 
-A Python script that downloads YouTube videos, transcribes them using Whisper (with CUDA support), and optionally translates them to Spanish using DeepL API.
+A Python script that downloads YouTube videos, transcribes them with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (CTranslate2 backend, CUDA-accelerated), and optionally translates them to Spanish using the DeepL API.
 
 ## Features
 
 - Downloads YouTube video audio using yt-dlp
-- Transcribes audio using OpenAI's Whisper (large model)
-- CUDA GPU acceleration support for faster transcription
-- Translation to Spanish using DeepL API
+- Transcribes audio using faster-whisper (default model: `large-v3`)
+- CUDA GPU acceleration, with automatic CPU fallback
+- Translation via DeepL, with automatic chunking for long transcripts
 - Markdown formatting for better readability
-- Progress bars for all operations
+- Live per-segment transcription progress
 - Caching support for the Whisper model
-- Reuse of existing transcriptions and translations
 
 ## Prerequisites
 
-- Python 3.8+
-- NVIDIA GPU with CUDA support
-- If CUDA is not available, you can use the small model instead:
+- Python 3.10+ (developed against 3.14)
+- NVIDIA GPU with CUDA support — optional; pass `--device cpu` to run without one
+- On a CPU-only machine, prefer a smaller model:
 
-  ```python
-  # Instead of:
-  model = whisper.load_model("large", device="cuda", download_root=cache_dir, fp16=True)
-  
-  # Use:
-  model = whisper.load_model("small", download_root=cache_dir)
+  ```bash
+  python extract-text.py --url "<url>" --model small --device cpu
   ```
 
 - FFmpeg:
@@ -115,39 +110,32 @@ A Python script that downloads YouTube videos, transcribes them using Whisper (w
 
 2. The script will automatically check CUDA availability when running.
 
-### Setting up CUDA (if not detected)
+### How CUDA is wired here
 
-If you have an NVIDIA GPU but CUDA is not being detected, follow these steps:
+All GPU compute runs through **CTranslate2** (the faster-whisper backend), not PyTorch.
+`torch` is installed only because ctranslate2 needs the cuBLAS/cuDNN binaries bundled in
+`torch/lib`; `cuda_dlls.py` puts that directory on the Windows DLL search path at import
+time. **You do not need a separate CUDA Toolkit or cuDNN installation** — a current NVIDIA
+driver plus `pip install -r requirements.txt` is sufficient.
 
-1. Install NVIDIA GPU drivers from [NVIDIA's website](https://www.nvidia.com/download/index.aspx)
+This matters on older GPUs. On a Quadro P5000 (Pascal, sm_61) the pinned torch build
+reports `torch.cuda.is_available() == True` but its kernels target sm_75 and newer, so
+torch cannot actually compute on that card. CTranslate2 can, which is why both scripts use
+it and why `int8` is the default compute type (Pascal's DP4A integer path is fast there,
+while `fp16` is slow).
 
-2. Install CUDA Toolkit:
-   - Download from [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
-   - Ensure version compatibility with PyTorch
+Verify what your GPU supports:
 
-3. Install cuDNN:
-   - Download from [NVIDIA cuDNN](https://developer.nvidia.com/cudnn)
-   - Follow installation instructions for your OS
+```python
+import torch
+print("CUDA available:", torch.cuda.is_available())
+print("torch kernel archs:", torch.cuda.get_arch_list())
+print("your GPU:", torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0))
+```
 
-4. Install PyTorch with CUDA support:
-
-   ```bash
-   # For CUDA 11.8
-   pip install torch --index-url https://download.pytorch.org/whl/cu118
-   
-   # For CUDA 12.1
-   pip install torch --index-url https://download.pytorch.org/whl/cu121
-   ```
-
-5. Verify installation:
-
-   ```python
-   import torch
-   print("CUDA available:", torch.cuda.is_available())
-   print("CUDA device:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No CUDA device")
-   ```
-
-Note: If CUDA is not available, the script will automatically fall back to CPU processing, which will be significantly slower for transcription tasks.
+Note: if CUDA is unavailable, `extract-text.py` falls back to CPU automatically
+(significantly slower). `transcribe_local.py` does not — pass `cpu` as its device
+argument explicitly.
 
 ## Usage
 
@@ -157,15 +145,33 @@ Run the script with a YouTube URL:
 python extract-text.py --url "https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
 ```
 
-Or run with the default test video:
-
-```bash
-python extract-text.py
-```
-
 Options:
 
-- `-u, --url`: YouTube video URL to process (optional)
+- `-u, --url`: YouTube video URL to process (**required**)
+- `-m, --model`: Whisper model name (default: `large-v3`)
+- `-d, --device`: `cuda` or `cpu` (default: `cuda`, falls back to CPU automatically)
+- `-c, --compute`: Compute type (default: `int8`)
+- `-l, --language`: Source language code such as `es` (default: auto-detect)
+- `-o, --output`: Transcript output path (default: `transcription.md`)
+- `--target-lang`: DeepL target language (default: `ES`)
+- `--no-translate`: Skip the DeepL translation step
+
+The translation is written alongside the transcript with the language appended —
+`transcription.md` produces `transcription_es.md`. Translation is skipped with a
+warning when `DEEPL_API_KEY` is unset; the transcript is still written.
+
+Exit status is `0` on success, `2` for a usage error, and `1` if the download,
+transcription, or a requested translation fails.
+
+Examples:
+
+```bash
+# Transcript only, no translation
+python extract-text.py -u "https://youtu.be/VIDEO_ID" --no-translate
+
+# Force Spanish source, translate to English, custom output path
+python extract-text.py -u "https://youtu.be/VIDEO_ID" -l es --target-lang EN -o charla.md
+```
 
 ## Local File Transcription (transcribe_local.py)
 

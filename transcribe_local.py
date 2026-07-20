@@ -1,4 +1,3 @@
-import importlib.util
 import os
 import sys
 import time
@@ -17,7 +16,7 @@ out_srt = sys.argv[3] if len(sys.argv) > 3 else None
 model_name = sys.argv[4] if len(sys.argv) > 4 else "large-v3"
 device = sys.argv[5] if len(sys.argv) > 5 else "cuda"
 compute = sys.argv[6] if len(sys.argv) > 6 else "int8"  # Pascal: int8 (DP4A) is fast; fp16 is slow on sm_61
-language = sys.argv[7] if len(sys.argv) > 7 else None  # None = auto-detect
+language = (sys.argv[7] if len(sys.argv) > 7 else None) or None  # None/"" = auto-detect
 
 _audio_abs = os.path.abspath(audio)
 if any(_out and os.path.abspath(_out) == _audio_abs for _out in (out_txt, out_srt)):
@@ -27,16 +26,11 @@ if out_srt and os.path.abspath(out_srt) == os.path.abspath(out_txt):
     print("Error: <out.txt> and <out.srt> are the same path", file=sys.stderr)
     sys.exit(2)
 
-# Pascal (P5000) GPU: ctranslate2 needs cuBLAS/cuDNN DLLs. Reuse the ones bundled with torch (Windows only).
-if hasattr(os, "add_dll_directory"):
-    _torch_spec = importlib.util.find_spec("torch")
-    _torch_lib = os.path.join(os.path.dirname(_torch_spec.origin), "lib") if _torch_spec and _torch_spec.origin else None
-    if _torch_lib and os.path.isdir(_torch_lib):
-        _dll_dir = os.add_dll_directory(_torch_lib)  # keep the handle alive for the process lifetime
-    else:
-        print("Warning: torch lib dir not found; ctranslate2 may fail to locate cuBLAS/cuDNN DLLs", file=sys.stderr)
+# Pascal (P5000): ctranslate2 needs cuBLAS/cuDNN DLLs, reused from torch's bundle.
+# This import MUST stay above faster_whisper -- it sets the DLL search path.
+import cuda_dlls  # noqa: F401,E402
 
-from faster_whisper import WhisperModel
+from faster_whisper import WhisperModel  # noqa: E402
 
 print(f"Loading model ({model_name}, {device}, {compute})...", flush=True)
 model = WhisperModel(model_name, device=device, compute_type=compute)
