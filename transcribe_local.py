@@ -30,6 +30,8 @@ if out_srt and os.path.abspath(out_srt) == os.path.abspath(out_txt):
 # This import MUST stay above faster_whisper -- it sets the DLL search path.
 import cuda_dlls  # noqa: F401,E402
 
+# isort: split
+# ruff: isort: split
 from faster_whisper import WhisperModel  # noqa: E402
 
 print(f"Loading model ({model_name}, {device}, {compute})...", flush=True)

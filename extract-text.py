@@ -15,13 +15,25 @@ import deepl
 from dotenv import load_dotenv
 from yt_dlp import YoutubeDL
 
-import cuda_dlls  # noqa: F401  -- must precede faster_whisper; sets the CUDA DLL search path
+# Sets the CUDA DLL search path; must run before faster_whisper/ctranslate2 load.
+# That ordering is enforced structurally rather than by comment: faster_whisper is
+# imported inside load_model(), where no import sorter can hoist it above this line.
+import cuda_dlls  # noqa: F401
 
 TEMP_DIR = "temp"
 CACHE_DIR = "cache"
 DEFAULT_MODEL = "large-v3"
 DEFAULT_COMPUTE = "int8"  # Pascal (sm_61): int8 uses fast DP4A kernels; fp16 is slow
-DEEPL_CHUNK_LIMIT = 100_000  # chars; DeepL rejects request bodies over 128 KiB
+# Bytes, not characters: DeepL's cap applies to the encoded request body, so a
+# character-based bound overshoots badly on non-ASCII (100k CJK chars ~= 300 KiB).
+# Held well under the 128 KiB cap to leave room for the JSON envelope.
+DEEPL_CHUNK_LIMIT = 100_000
+CPU_SAFE_COMPUTE = {"int8", "int8_float32", "float32"}
+# Substrings that mark an exception as a CUDA/driver/library init failure rather than a
+# bad model name, a network error, or a permissions problem.
+CUDA_FAILURE_MARKERS = ("cuda", "cublas", "cudnn", "gpu", "device", "driver", "no kernel image")
+# Languages written without spaces between words.
+UNSPACED_LANGUAGES = frozenset({"ja", "zh", "yue", "th", "lo", "my", "km"})
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -80,8 +92,22 @@ def download_audio(url):
     return path
 
 
+def _is_cuda_failure(exc):
+    """True when an exception looks like a CUDA/driver/library initialisation failure.
+
+    Guards the CPU fallback: without this, an invalid model name or a network error is
+    reported as "CUDA unavailable" and retried on CPU, hiding the real cause and paying
+    for a second model download.
+    """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in CUDA_FAILURE_MARKERS)
+
+
 def load_model(model_name, device, compute, cache_dir):
     """Load a faster-whisper model, falling back to CPU if CUDA is unusable.
+
+    The fallback covers model *construction* only. faster-whisper decodes lazily, so a
+    CUDA failure raised while iterating segments is not recoverable here.
 
     Returns (model, device_actually_used).
     """
@@ -92,25 +118,33 @@ def load_model(model_name, device, compute, cache_dir):
         model = WhisperModel(model_name, device=device, compute_type=compute, download_root=cache_dir)
         return model, device
     except Exception as exc:
-        if device == "cpu":
+        if device == "cpu" or not _is_cuda_failure(exc):
             raise
-        print(f"\nCUDA unavailable ({exc}); falling back to CPU -- significantly slower.", file=sys.stderr)
-        model = WhisperModel(model_name, device="cpu", compute_type=compute, download_root=cache_dir)
+        # float16 and friends are GPU-only in CTranslate2 -- reusing the requested
+        # compute type on CPU would crash the fallback it is meant to rescue.
+        cpu_compute = compute if compute in CPU_SAFE_COMPUTE else "int8"
+        swap = "" if cpu_compute == compute else f"; compute {compute} -> {cpu_compute} (CPU-unsupported)"
+        print(f"\nCUDA unavailable ({exc}); falling back to CPU -- significantly slower{swap}.", file=sys.stderr)
+        model = WhisperModel(model_name, device="cpu", compute_type=cpu_compute, download_root=cache_dir)
         return model, "cpu"
 
 
-def transcribe(model, audio_path, language):
+def transcribe(model, audio_path, language, use_vad=True):
     """Transcribe audio and return the joined text.
 
     faster-whisper yields segments lazily, so decoding happens as this loop runs --
     which is what makes the progress readout real rather than simulated.
+
+    VAD is on by default (it skips silence and speeds long recordings up considerably)
+    but can drop quiet or clipped speech, so `--no-vad` disables it. The previous
+    openai-whisper path had no VAD at all.
     """
     segments, info = model.transcribe(
         audio_path,
         language=language,
         beam_size=5,
-        vad_filter=True,
-        vad_parameters=dict(min_silence_duration_ms=500),
+        vad_filter=use_vad,
+        vad_parameters=dict(min_silence_duration_ms=500) if use_vad else None,
     )
     mode = "forced" if language else "detected"
     print(
@@ -125,7 +159,10 @@ def transcribe(model, audio_path, language):
         pct = (seg.end / info.duration * 100) if info.duration else 0
         print(f"\r   [{pct:5.1f}%] elapsed={time.time() - t0:4.0f}s", end="", flush=True)
     print(f"\r   transcribed in {time.time() - t0:.0f}s{' ' * 24}")
-    return " ".join(p for p in parts if p)
+    # Japanese/Chinese/Thai and friends are written without inter-word spaces; joining
+    # their segments with " " would inject breaks the source text does not have.
+    glue = "" if info.language in UNSPACED_LANGUAGES else " "
+    return glue.join(p for p in parts if p)
 
 
 def format_to_markdown(text, source_url=None):
@@ -168,26 +205,61 @@ def format_to_markdown(text, source_url=None):
     return md
 
 
-def chunk_text(text, limit=DEEPL_CHUNK_LIMIT):
-    """Split text into chunks of at most `limit` chars, preferring sentence boundaries."""
-    if len(text) <= limit:
-        return [text]
+def _utf8_len(s):
+    return len(s.encode("utf-8"))
 
-    chunks, current = [], ""
-    for sentence in re.split(r"(?<=[.!?])\s+", text):
-        while len(sentence) > limit:  # a single sentence longer than the limit
-            if current:
-                chunks.append(current)
-                current = ""
-            chunks.append(sentence[:limit])
-            sentence = sentence[limit:]
-        if current and len(current) + len(sentence) + 1 > limit:
-            chunks.append(current)
-            current = sentence
+
+def _fit(s, byte_budget):
+    """Longest prefix of `s` encoding to at most `byte_budget` UTF-8 bytes.
+
+    Truncates on the encoded form and discards a trailing partial character, so a
+    multi-byte codepoint is never split down the middle.
+    """
+    if byte_budget <= 0:
+        return ""
+    return s.encode("utf-8")[:byte_budget].decode("utf-8", errors="ignore")
+
+
+def _atoms(text, limit):
+    """Yield (separator, token) pairs; concatenating every separator+token rebuilds `text`.
+
+    A token larger than a whole chunk is hard-split into pieces joined by "" so that
+    reassembly cannot invent a word break in the middle of it.
+    """
+    for ws, token in re.findall(r"(\s*)(\S+)", text):
+        sep = ws
+        while _utf8_len(token) > limit:
+            head = _fit(token, limit)
+            if not head:
+                break
+            yield sep, head
+            token, sep = token[len(head):], ""
+        if token:
+            yield sep, token
+
+
+def chunk_text(text, limit=DEEPL_CHUNK_LIMIT):
+    """Split text into chunks whose UTF-8 encoding stays under `limit` bytes.
+
+    Returns [(separator, chunk), ...] where `separator` is the whitespace that joined
+    this chunk to the previous one in the source -- "" when a single token had to be
+    split mid-word. Rejoining with those separators reproduces the original spacing
+    instead of collapsing every boundary to one space.
+    """
+    if _utf8_len(text) <= limit:
+        return [("", text)]
+
+    chunks, current, current_sep = [], "", ""
+    for sep, token in _atoms(text, limit):
+        if not current:
+            current, current_sep = token, sep
+        elif _utf8_len(current) + _utf8_len(sep) + _utf8_len(token) > limit:
+            chunks.append((current_sep, current))
+            current, current_sep = token, sep
         else:
-            current = f"{current} {sentence}".strip()
+            current += sep + token
     if current:
-        chunks.append(current)
+        chunks.append((current_sep, current))
     return chunks
 
 
@@ -209,10 +281,17 @@ def translate(text, target_lang):
 
     chunks = chunk_text(text)
     print(f"3. Translating to {target_lang} ({len(chunks)} chunk(s))...")
-    results = client.translate_text(chunks, target_lang=target_lang)
-    if not isinstance(results, list):
-        results = [results]
-    return " ".join(r.text for r in results)
+
+    out = []
+    for i, (sep, chunk) in enumerate(chunks, 1):
+        # One request per chunk. Handing the whole list to translate_text() would put
+        # every chunk into a single HTTP body -- precisely the size cap the chunking
+        # exists to stay under, so batching here would defeat it entirely.
+        result = client.translate_text(chunk, target_lang=target_lang)
+        out.append(("" if i == 1 else sep) + result.text)
+        if len(chunks) > 1:
+            print(f"   chunk {i}/{len(chunks)}", flush=True)
+    return "".join(out)
 
 
 def translated_path(output, target_lang):
@@ -222,6 +301,10 @@ def translated_path(output, target_lang):
 
 
 def write_markdown(path, content):
+    """Write markdown, creating the parent directory when the path is nested."""
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
 
@@ -236,7 +319,14 @@ def parse_args(argv=None):
     parser.add_argument("--output", "-o", default="transcription.md", help="Transcript output path")
     parser.add_argument("--target-lang", default="ES", help="DeepL target language (default: ES)")
     parser.add_argument("--no-translate", action="store_true", help="Skip the DeepL translation step")
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--no-vad",
+        action="store_true",
+        help="Disable voice-activity filtering (slower, but keeps quiet or clipped speech)",
+    )
+    args = parser.parse_args(argv)
+    args.language = args.language or None  # an explicit -l "" means auto-detect
+    return args
 
 
 def main(argv=None):
@@ -249,8 +339,8 @@ def main(argv=None):
 
         print("2. Transcribing...")
         model, device = load_model(args.model, args.device, args.compute, cache_dir)
-        print(f"   model={args.model} device={device} compute={args.compute}")
-        text = transcribe(model, audio_path, args.language)
+        print(f"   model={args.model} device={device} compute={args.compute} vad={not args.no_vad}")
+        text = transcribe(model, audio_path, args.language, use_vad=not args.no_vad)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -263,7 +353,11 @@ def main(argv=None):
         print("Error: transcription produced no text", file=sys.stderr)
         return 1
 
-    write_markdown(args.output, format_to_markdown(text, source_url=args.url))
+    try:
+        write_markdown(args.output, format_to_markdown(text, source_url=args.url))
+    except OSError as exc:
+        print(f"Error: could not write transcript to {args.output}: {exc}", file=sys.stderr)
+        return 1
     print(f"Transcription saved to {args.output}")
 
     if args.no_translate:
@@ -283,7 +377,11 @@ def main(argv=None):
         return 0
 
     out_path = translated_path(args.output, args.target_lang)
-    write_markdown(out_path, format_to_markdown(translated, source_url=args.url))
+    try:
+        write_markdown(out_path, format_to_markdown(translated, source_url=args.url))
+    except OSError as exc:
+        print(f"Error: could not write translation to {out_path}: {exc}", file=sys.stderr)
+        return 1
     print(f"Translation saved to {out_path}")
     return 0
 

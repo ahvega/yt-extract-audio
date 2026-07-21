@@ -20,6 +20,22 @@ import sys
 _dll_dir = None
 
 
+def _warn_if_backend_already_loaded():
+    """Warn when this module is imported too late to matter.
+
+    Extending the DLL search path only affects libraries loaded afterwards. If
+    ctranslate2 is already in sys.modules the damage is done, and the resulting CUDA
+    error gives no hint that an import got reordered -- so say so explicitly.
+    """
+    late = [m for m in ("ctranslate2", "faster_whisper") if m in sys.modules]
+    if late:
+        print(
+            f"Warning: cuda_dlls imported after {', '.join(late)} -- the CUDA DLL search "
+            "path was set too late to affect it. Import cuda_dlls first.",
+            file=sys.stderr,
+        )
+
+
 def preload_cuda_dlls():
     """Add torch's bundled CUDA runtime dir to the DLL search path.
 
@@ -31,6 +47,7 @@ def preload_cuda_dlls():
         return None
     if _dll_dir is not None:  # already registered
         return None
+    _warn_if_backend_already_loaded()
 
     spec = importlib.util.find_spec("torch")
     lib_dir = os.path.join(os.path.dirname(spec.origin), "lib") if spec and spec.origin else None

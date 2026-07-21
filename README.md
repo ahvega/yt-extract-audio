@@ -6,7 +6,7 @@ A Python script that downloads YouTube videos, transcribes them with [faster-whi
 
 - Downloads YouTube video audio using yt-dlp
 - Transcribes audio using faster-whisper (default model: `large-v3`)
-- CUDA GPU acceleration, with automatic CPU fallback
+- CUDA GPU acceleration, with CPU fallback if the model cannot load on the GPU
 - Translation via DeepL, with automatic chunking for long transcripts
 - Markdown formatting for better readability
 - Live per-segment transcription progress
@@ -133,9 +133,11 @@ print("torch kernel archs:", torch.cuda.get_arch_list())
 print("your GPU:", torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0))
 ```
 
-Note: if CUDA is unavailable, `extract-text.py` falls back to CPU automatically
-(significantly slower). `transcribe_local.py` does not — pass `cpu` as its device
-argument explicitly.
+Note: if the model cannot be *loaded* on CUDA, `extract-text.py` retries on CPU
+automatically (significantly slower), downgrading a GPU-only compute type such as
+`float16` to `int8`. The fallback does not cover failures raised later during decoding,
+since faster-whisper decodes lazily — those surface as a normal error exit.
+`transcribe_local.py` has no fallback at all; pass `cpu` as its device argument.
 
 ## Usage
 
@@ -155,6 +157,9 @@ Options:
 - `-o, --output`: Transcript output path (default: `transcription.md`)
 - `--target-lang`: DeepL target language (default: `ES`)
 - `--no-translate`: Skip the DeepL translation step
+- `--no-vad`: Disable voice-activity filtering. VAD is on by default and speeds up long
+  recordings by skipping silence, but it can drop quiet or clipped speech — use this when
+  transcript completeness matters more than speed.
 
 The translation is written alongside the transcript with the language appended —
 `transcription.md` produces `transcription_es.md`. Translation is skipped with a

@@ -72,6 +72,18 @@ changes) + **agy** (Gemini CLI, optional third viewpoint).
 - **Positional CLI (no argparse)** and **`--extra-index-url` (not `--index-url`)**:
   accepted tradeoffs — the non-torch deps only exist on PyPI, and the at-risk packages
   carry exact local-version pins.
+- **`requested_downloads[0]['filepath']` is "the pre-postprocessed path"**: NOT a bug —
+  agy raised this as BLOCKING in PR #6, claiming `download_audio()` would crash on every
+  download. Disproven empirically (yt-dlp 2026.7.4, `FFmpegExtractAudio` → wav, served
+  over localhost): the field reads `temp\clip.wav` and the file exists. yt-dlp mutates
+  those entries in place when postprocessors run. The proposed fix — `info.get('filepath')`
+  — is actively wrong: that key is `None` on the top-level info dict, so it would fall
+  through to the guessed path. Re-verify with a local HTTP-served audio file before
+  accepting any future claim here.
+- **Whitespace collapse in DeepL chunk reassembly**: fixed in PR #6 — `chunk_text()`
+  returns `(separator, chunk)` pairs so rejoining reproduces the source exactly. Do not
+  "simplify" it back to a plain list joined with `" "`; that reintroduces both the
+  mid-word space injection and the newline loss.
 
 *Data note:* the loop sends only diffs (never gitignored secrets); the repo must hold no
 real PII/PHI. External reviewer CLIs are authorized dev tools with the same repo access as
