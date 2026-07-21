@@ -1,11 +1,19 @@
-python-dotenv==1.0.0
-openai-whisper==20231117
-yt-dlp==2024.3.10
-tqdm==4.66.2
-deepl==1.17.0
-numpy>=1.24.3
-ffmpeg-python>=0.2.0
+# Transcription engine. CTranslate2 does all GPU compute -- it supports Pascal
+# (sm_61) with fast int8 DP4A kernels, which is why both scripts use it.
+faster-whisper==1.2.1
+ctranslate2==4.8.1
+
+# NOT an inference engine on this hardware: the cu128 builds target sm_75+ and
+# cannot launch kernels on the Quadro P5000. torch is pinned solely for the
+# cuBLAS/cuDNN binaries in torch/lib that ctranslate2 loads (see cuda_dlls.py).
+# Keep the +cu128 local version AND the extra index: a bare `torch>=X` resolves a
+# newer CPU-only wheel from PyPI and silently drops those DLLs.
+# 2.11.0+cu128 is the newest build available on the cu128 index.
 --extra-index-url https://download.pytorch.org/whl/cu128
 torch==2.11.0+cu128
-faster-whisper==1.2.1
-ctranslate2==4.8.0
+
+# YouTube download + optional translation (extract-text.py only).
+# yt-dlp tracks YouTube extractor changes -- stale pins here break downloads first.
+yt-dlp==2026.7.4
+deepl==1.30.0
+python-dotenv==1.2.2
